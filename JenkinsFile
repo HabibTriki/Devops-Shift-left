@@ -18,25 +18,13 @@ pipeline {
     stage('Set up Python environment') {
       steps {
         bat '''
-          @echo on
-          setlocal EnableDelayedExpansion
-
-          rem Create venv
-          python -m venv "%VENV_DIR%" || exit /b 1
-
-          rem Upgrade pip
-          call "%VENV_DIR%\\Scripts\\python" -m pip install --upgrade pip || exit /b 1
-
-          rem Install project deps (if any)
+          python -m venv %VENV_DIR% || exit /b 1
+          call %VENV_DIR%\\Scripts\\python -m pip install --upgrade pip || exit /b 1
           if exist requirements.txt (
-            call "%VENV_DIR%\\Scripts\\python" -m pip install -r requirements.txt || exit /b 1
+            call %VENV_DIR%\\Scripts\\python -m pip install -r requirements.txt || exit /b 1
           )
-
-          rem Install test tooling
-          call "%VENV_DIR%\\Scripts\\python" -m pip install pytest pytest-cov pytest-junitxml || exit /b 1
-
-          rem Show interpreter just to confirm
-          call "%VENV_DIR%\\Scripts\\python" -c "import sys; print(sys.version)"
+          rem ↓ remove pytest-junitxml; not a real package
+          call %VENV_DIR%\\Scripts\\python -m pip install pytest pytest-cov || exit /b 1
         '''
       }
     }
