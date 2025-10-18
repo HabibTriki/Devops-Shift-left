@@ -17,38 +17,77 @@ pipeline {
 
     stage('Set up Python environment') {
       steps {
-        sh '''
-          set -e
-          python3 -m venv "$VENV_DIR"
-          . "$VENV_DIR/bin/activate"
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
-          pip install pytest pytest-cov pytest-junitxml
-        '''
+        script {
+          if (isUnix()) {
+            sh '''
+              set -e
+              python3 -m venv "$VENV_DIR"
+              "$VENV_DIR/bin/python" -m pip install --upgrade pip
+              if [ -f requirements.txt ]; then
+                "$VENV_DIR/bin/python" -m pip install -r requirements.txt
+              fi
+              "$VENV_DIR/bin/python" -m pip install pytest pytest-cov pytest-junitxml
+            '''
+          } else {
+            bat '''
+              python -m venv %VENV_DIR%
+              call %VENV_DIR%\\Scripts\\python -m pip install --upgrade pip
+              if exist requirements.txt (
+                call %VENV_DIR%\\Scripts\\python -m pip install -r requirements.txt
+              )
+              call %VENV_DIR%\\Scripts\\python -m pip install pytest pytest-cov pytest-junitxml
+            '''
+          }
+        }
       }
     }
 
     stage('Run unit tests') {
       steps {
-        sh '''
-          set -e
-          . "$VENV_DIR/bin/activate"
-          mkdir -p reports coverage
-          pytest -q --junitxml=reports/junit.xml --cov=. --cov-report=xml:coverage/coverage.xml
-        '''
+        script {
+          if (isUnix()) {
+            sh '''
+              set -e
+              mkdir -p reports coverage
+              "$VENV_DIR/bin/python" -m pytest -q \
+                --junitxml=reports/junit.xml \
+                --cov=. \
+                --cov-report=xml:coverage/coverage.xml
+            '''
+          } else {
+            bat '''
+              if not exist reports mkdir reports
+              if not exist coverage mkdir coverage
+              call %VENV_DIR%\\Scripts\\python -m pytest -q ^
+                --junitxml=reports\\junit.xml ^
+                --cov=. ^
+                --cov-report=xml:coverage\\coverage.xml
+            '''
+          }
+        }
       }
     }
   }
 
   post {
     always {
-      junit 'reports/junit.xml'
-      archiveArtifacts artifacts: 'reports/**,coverage/**', onlyIfSuccessful: false
-      sh '''
-        rm -rf "$VENV_DIR" || true
-      '''
+      script {
+        if (fileExists('reports/junit.xml')) {
+          junit 'reports/junit.xml'
+        } else {
+          echo 'JUnit report not found; skipping test result publication.'
+        }
+
+        archiveArtifacts artifacts: 'reports/**,coverage/**', allowEmptyArchive: true, onlyIfSuccessful: false
+
+        if (fileExists(env.VENV_DIR)) {
+          if (isUnix()) {
+            sh "rm -rf '${env.VENV_DIR}'"
+          } else {
+            bat "rmdir /s /q %VENV_DIR%"
+          }
+        }
+      }
       cleanWs()
     }
   }
