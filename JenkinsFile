@@ -17,78 +17,61 @@ pipeline {
 
     stage('Set up Python environment') {
       steps {
-        script {
-          if (isUnix()) {
-            sh '''
-              set -e
-              python3 -m venv "$VENV_DIR"
-              "$VENV_DIR/bin/python" -m pip install --upgrade pip
-              if [ -f requirements.txt ]; then
-                "$VENV_DIR/bin/python" -m pip install -r requirements.txt
-              fi
-              "$VENV_DIR/bin/python" -m pip install pytest pytest-cov pytest-junitxml
-            '''
-          } else {
-            bat '''
-              python -m venv %VENV_DIR%
-              call %VENV_DIR%\\Scripts\\python -m pip install --upgrade pip
-              if exist requirements.txt (
-                call %VENV_DIR%\\Scripts\\python -m pip install -r requirements.txt
-              )
-              call %VENV_DIR%\\Scripts\\python -m pip install pytest pytest-cov pytest-junitxml
-            '''
-          }
-        }
+        bat '''
+          @echo on
+          setlocal EnableDelayedExpansion
+
+          rem Create venv
+          python -m venv "%VENV_DIR%" || exit /b 1
+
+          rem Upgrade pip
+          call "%VENV_DIR%\\Scripts\\python" -m pip install --upgrade pip || exit /b 1
+
+          rem Install project deps (if any)
+          if exist requirements.txt (
+            call "%VENV_DIR%\\Scripts\\python" -m pip install -r requirements.txt || exit /b 1
+          )
+
+          rem Install test tooling
+          call "%VENV_DIR%\\Scripts\\python" -m pip install pytest pytest-cov pytest-junitxml || exit /b 1
+
+          rem Show interpreter just to confirm
+          call "%VENV_DIR%\\Scripts\\python" -c "import sys; print(sys.version)"
+        '''
       }
     }
 
+
     stage('Run unit tests') {
       steps {
-        script {
-          if (isUnix()) {
-            sh '''
-              set -e
-              mkdir -p reports coverage
-              "$VENV_DIR/bin/python" -m pytest -q \
-                --junitxml=reports/junit.xml \
-                --cov=. \
-                --cov-report=xml:coverage/coverage.xml
-            '''
-          } else {
-            bat '''
-              if not exist reports mkdir reports
-              if not exist coverage mkdir coverage
-              call %VENV_DIR%\\Scripts\\python -m pytest -q ^
-                --junitxml=reports\\junit.xml ^
-                --cov=. ^
-                --cov-report=xml:coverage\\coverage.xml
-            '''
-          }
-        }
+        bat '''
+          @echo on
+          setlocal EnableDelayedExpansion
+
+          if not exist reports mkdir reports
+          if not exist coverage mkdir coverage
+
+          call "%VENV_DIR%\\Scripts\\python" -m pytest -q ^
+            --junitxml=reports\\junit.xml ^
+            --cov=. ^
+            --cov-report=xml:coverage\\coverage.xml
+
+          set EXITCODE=%ERRORLEVEL%
+          echo Pytest exit code: %EXITCODE%
+          exit /b %EXITCODE%
+        '''
       }
     }
+
   }
 
   post {
     always {
-      script {
-        if (fileExists('reports/junit.xml')) {
-          junit 'reports/junit.xml'
-        } else {
-          echo 'JUnit report not found; skipping test result publication.'
-        }
-
-        archiveArtifacts artifacts: 'reports/**,coverage/**', allowEmptyArchive: true, onlyIfSuccessful: false
-
-        if (fileExists(env.VENV_DIR)) {
-          if (isUnix()) {
-            sh "rm -rf '${env.VENV_DIR}'"
-          } else {
-            bat "rmdir /s /q %VENV_DIR%"
-          }
-        }
-      }
+      junit testResults: 'reports/junit.xml', allowEmptyResults: true
+      archiveArtifacts artifacts: 'reports/**,coverage/**', allowEmptyArchive: true, onlyIfSuccessful: false
+      bat 'rmdir /S /Q "%VENV_DIR%" || exit /b 0'
       cleanWs()
     }
   }
+
 }
