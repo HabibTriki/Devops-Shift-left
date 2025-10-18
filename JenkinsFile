@@ -10,48 +10,46 @@ pipeline {
   }
   stages {
     stage('Checkout') {
-      steps { checkout scm }
+      steps {
+        checkout scm
+      }
     }
 
     stage('Set up Python environment') {
       steps {
-        bat '''
-          @echo on
-          where python
-          rem Créer l’environnement virtuel avec l’interpréteur par défaut
-          python -m venv "%VENV_DIR%"
-          call "%VENV_DIR%\\Scripts\\activate"
+        sh '''
+          set -e
+          python3 -m venv "$VENV_DIR"
+          . "$VENV_DIR/bin/activate"
           python -m pip install --upgrade pip
-          if exist requirements.txt (
+          if [ -f requirements.txt ]; then
             pip install -r requirements.txt
-          )
+          fi
           pip install pytest pytest-cov pytest-junitxml
         '''
       }
     }
 
-
     stage('Run unit tests') {
       steps {
-        bat '''
-          @echo on
-          call "%VENV_DIR%\\Scripts\\activate"
-          if not exist reports mkdir reports
-          if not exist coverage mkdir coverage
-          pytest -q --junitxml=reports\\junit.xml --cov=. --cov-report=xml:coverage\\coverage.xml
+        sh '''
+          set -e
+          . "$VENV_DIR/bin/activate"
+          mkdir -p reports coverage
+          pytest -q --junitxml=reports/junit.xml --cov=. --cov-report=xml:coverage/coverage.xml
         '''
       }
     }
-
+  }
 
   post {
     always {
       junit 'reports/junit.xml'
       archiveArtifacts artifacts: 'reports/**,coverage/**', onlyIfSuccessful: false
-      bat 'rmdir /S /Q "%VENV_DIR%" || exit /B 0'
+      sh '''
+        rm -rf "$VENV_DIR" || true
+      '''
       cleanWs()
     }
   }
-
-}
 }
