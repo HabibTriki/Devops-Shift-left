@@ -68,8 +68,21 @@ pipeline {
           @echo on
           if not exist security-reports mkdir security-reports
 
-          rem >>> Add your user npm-global bin so Jenkins can find snyk
-          set "PATH=C:\\Users\\Lenovo\\AppData\\Roaming\\npm;%PATH%"
+          rem --- Discover npm global bin for *this* account (the Jenkins service user)
+          for /f "usebackq delims=" %%p in (`npm bin -g`) do set "NPM_BIN=%%p"
+          if not defined NPM_BIN (
+            echo [ERROR] Could not determine npm global bin. Is Node.js/npm installed for this agent?
+            exit /b 1
+          )
+
+          rem Add it to PATH and show what we found
+          set "PATH=%NPM_BIN%;%PATH%"
+          echo NPM_BIN=%NPM_BIN%
+          where snyk || (
+            echo [ERROR] snyk not found in %NPM_BIN% . Try: npm install -g snyk (as the Jenkins service account)
+            exit /b 1
+          )
+          snyk --version
 
           echo ========================================
           echo Running Snyk Dependency Scan...
@@ -79,16 +92,17 @@ pipeline {
           snyk auth %SNYK_TOKEN%
 
           echo Running Snyk test...
-          snyk test --severity-threshold=high --json-file-output=security-reports/snyk-report.json || set SNYK_FAILED=1
-          snyk test --severity-threshold=high > security-reports/snyk-report.txt 2>&1 || set SNYK_FAILED=1
+          snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
+          snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
 
           echo.
           echo ========================================
           echo Snyk Scan Results (Summary):
           echo ========================================
-          snyk test --severity-threshold=high␊
-          if defined SNYK_FAILED (␊
-            echo.␊
+          snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high
+
+          if defined SNYK_FAILED (
+            echo.
             echo [ERROR] Snyk found HIGH/CRITICAL vulnerabilities! See security-reports/snyk-report.txt
             exit /b 1
           ) else (
@@ -96,10 +110,10 @@ pipeline {
             echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found by Snyk.
             exit /b 0
           )
-
         '''
       }
     }
+
 
 
     stage('Run unit tests') {
