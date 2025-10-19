@@ -36,16 +36,20 @@ pipeline {
             @echo on
             if not exist security-reports mkdir security-reports
             
-            echo Running Bandit security scan...
-            call %VENV_DIR%\\Scripts\\bandit -r . -f json -o security-reports\\bandit-report.json || set BANDIT_FAILED=1
-            call %VENV_DIR%\\Scripts\\bandit -r . -f txt -o security-reports\\bandit-report.txt || set BANDIT_FAILED=1
-            call %VENV_DIR%\\Scripts\\bandit -r . -f html -o security-reports\\bandit-report.html || set BANDIT_FAILED=1
+            echo ========================================
+            echo Running Bandit Security Scan...
+            echo ========================================
+            
+            rem Generate reports in multiple formats (excluding venv, tests, .git)
+            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f json -o security-reports\\bandit-report.json || set BANDIT_FAILED=1
+            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f txt -o security-reports\\bandit-report.txt || set BANDIT_FAILED=1
+            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f html -o security-reports\\bandit-report.html || set BANDIT_FAILED=1
             
             echo.
             echo ========================================
             echo Bandit Scan Results (Summary):
             echo ========================================
-            call %VENV_DIR%\\Scripts\\bandit -r . -ll -f screen
+            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -ll -f screen
             
             if defined BANDIT_FAILED (
               echo.
@@ -53,6 +57,9 @@ pipeline {
               echo Review the report at: security-reports\\bandit-report.html
               exit /b 1
             )
+            
+            echo.
+            echo [SUCCESS] No HIGH/MEDIUM severity issues found by Bandit.
           '''
         }
       }
@@ -65,12 +72,18 @@ pipeline {
             @echo on
             if not exist security-reports mkdir security-reports
             
+            echo ========================================
+            echo Running Snyk Dependency Scan...
+            echo ========================================
+            
+            rem Authenticate with Snyk using the token
             echo Authenticating with Snyk...
             snyk auth %SNYK_TOKEN%
             
-            echo Running Snyk dependency scan...
+            rem Run Snyk test and generate reports
+            echo Running Snyk test...
             snyk test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
-            snyk test --severity-threshold=high > security-reports\\snyk-report.txt || set SNYK_FAILED=1
+            snyk test --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
             
             echo.
             echo ========================================
@@ -84,6 +97,9 @@ pipeline {
               echo Review the report at: security-reports\\snyk-report.txt
               exit /b 1
             )
+            
+            echo.
+            echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found by Snyk.
           '''
         }
       }
@@ -98,10 +114,15 @@ pipeline {
           if not exist reports mkdir reports
           if not exist coverage mkdir coverage
 
-          call "%VENV_DIR%\\Scripts\\python" -m pytest -q ^
+          echo ========================================
+          echo Running Unit Tests...
+          echo ========================================
+
+          call "%VENV_DIR%\\Scripts\\python" -m pytest -v ^
             --junitxml=reports\\junit.xml ^
             --cov=. ^
-            --cov-report=xml:coverage\\coverage.xml
+            --cov-report=xml:coverage\\coverage.xml ^
+            --cov-report=html:coverage\\htmlcov
 
           set EXITCODE=%ERRORLEVEL%
           echo Pytest exit code: %EXITCODE%
@@ -114,9 +135,13 @@ pipeline {
 
   post {
     always {
+      // Publish test results
       junit testResults: 'reports/junit.xml', allowEmptyResults: true
+      
+      // Archive all reports
       archiveArtifacts artifacts: 'reports/**,coverage/**,security-reports/**', allowEmptyArchive: true, onlyIfSuccessful: false
       
+      // Publish Bandit HTML report
       script {
         if (fileExists('security-reports/bandit-report.html')) {
           publishHTML([
@@ -130,16 +155,23 @@ pipeline {
         }
       }
       
+      // Clean up
       bat 'rmdir /S /Q "%VENV_DIR%" || exit /b 0'
       cleanWs()
     }
     
     success {
-      echo '✓ Pipeline passed! All security scans and tests succeeded.'
+      echo '✓ ========================================='
+      echo '✓ Pipeline PASSED!'
+      echo '✓ All security scans and tests succeeded.'
+      echo '✓ ========================================='
     }
     
     failure {
-      echo '✗ Pipeline failed! Check security reports or test results.'
+      echo '✗ ========================================='
+      echo '✗ Pipeline FAILED!'
+      echo '✗ Check security reports or test results.'
+      echo '✗ ========================================='
     }
   }
 
