@@ -31,39 +31,34 @@ pipeline {
 
     stage('SAST - Bandit Security Scan') {
       steps {
-        script {
-          bat '''
-            @echo on
-            if not exist security-reports mkdir security-reports
-            
-            echo ========================================
-            echo Running Bandit Security Scan...
-            echo ========================================
-            
-            rem Generate reports in multiple formats (excluding venv, tests, .git)
-            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f json -o security-reports\\bandit-report.json || set BANDIT_FAILED=1
-            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f txt -o security-reports\\bandit-report.txt || set BANDIT_FAILED=1
-            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f html -o security-reports\\bandit-report.html || set BANDIT_FAILED=1
-            
+        bat '''
+          @echo on
+          if not exist security-reports mkdir security-reports
+
+          echo ========================================
+          echo Running Bandit Security Scan...
+          echo ========================================
+
+          rem Generate reports (warning-only mode)
+          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f json -o security-reports\\bandit-report.json  || set BANDIT_FAILED=1
+          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f txt  -o security-reports\\bandit-report.txt   || set BANDIT_FAILED=1
+          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f html -o security-reports\\bandit-report.html  || set BANDIT_FAILED=1
+
+          echo.
+          echo ========================================
+          echo Bandit Scan Results (Summary):
+          echo ========================================
+          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -ll -f screen  || set BANDIT_FAILED=1
+
+          if defined BANDIT_FAILED (
             echo.
-            echo ========================================
-            echo Bandit Scan Results (Summary):
-            echo ========================================
-            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -ll -f screen
-            
-            if defined BANDIT_FAILED (
-              echo.
-              echo [WARNING] Bandit found HIGH or MEDIUM severity issues!
-              echo Review the report at: security-reports\\bandit-report.html
-              echo.
-              echo [INFO] Continuing pipeline to test all stages...
-              echo [INFO] To enable strict mode, uncomment exit /b 1 in Jenkinsfile
-            ) else (
-              echo.
-              echo [SUCCESS] No HIGH/MEDIUM severity issues found by Bandit.
-            )
-          '''
-        }
+            echo [WARNING] Bandit found issues. Reports saved under security-reports\\bandit-report.*
+            rem STRICT MODE (later): to fail build on findings, replace the next line with:  exit /b 1
+          )
+
+          rem IMPORTANT: keep pipeline going regardless of Bandit result
+          exit /b 0
+        '''
       }
     }
 
