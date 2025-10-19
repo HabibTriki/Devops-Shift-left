@@ -1,0 +1,18 @@
+[bandit]
+# Exclude directories from scanning
+exclude_dirs = 
+    /venv/
+    /tests/
+    /.git/
+    /__pycache__/
+    /.pytest_cache/
+
+# Only report issues with MEDIUM or HIGH confidence
+confidence = MEDIUM
+
+# Only report MEDIUM and HIGH severity issues
+severity = MEDIUM
+
+# Skip certain tests (comma-separated)
+# B101 = assert_used (common in unit tests)
+skips = B101
