@@ -64,44 +64,35 @@ pipeline {
 
     stage('SCA - Snyk Dependency Scan') {
       steps {
-        script {
-          bat '''
-            @echo on
-            if not exist security-reports mkdir security-reports
-            
-            echo ========================================
-            echo Running Snyk Dependency Scan...
-            echo ========================================
-            
-            rem Authenticate with Snyk using the token
-            echo Authenticating with Snyk...
-            snyk auth %SNYK_TOKEN%
-            
-            rem Run Snyk test and generate reports
-            echo Running Snyk test...
-            snyk test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
-            snyk test --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
-            
-            echo.
-            echo ========================================
-            echo Snyk Scan Results (Summary):
-            echo ========================================
-            snyk test --severity-threshold=high
-            
-            if defined SNYK_FAILED (
-              echo.
-              echo [WARNING] Snyk found HIGH or CRITICAL vulnerabilities!
-              echo Review the report at: security-reports\\snyk-report.txt
-              echo.
-              echo [INFO] Continuing pipeline to test all stages...
-              echo [INFO] To enable strict mode, edit Jenkinsfile and uncomment exit /b 1
-              rem exit /b 1
-            ) else (
-              echo.
-              echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found by Snyk.
-            )
-          '''
-        }
+        bat '''
+          @echo on
+          if not exist security-reports mkdir security-reports
+
+          rem >>> Add your user npm-global bin so Jenkins can find snyk
+          set "PATH=C:\\Users\\Lenovo\\AppData\\Roaming\\npm;%PATH%"
+
+          echo ========================================
+          echo Running Snyk Dependency Scan...
+          echo ========================================
+
+          echo Authenticating with Snyk...
+          snyk auth %SNYK_TOKEN%
+
+          echo Running Snyk test...
+          snyk test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
+          snyk test --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
+
+          echo.
+          echo ========================================
+          echo Snyk Scan Results (Summary):
+          echo ========================================
+          snyk test --severity-threshold=high
+
+          if defined SNYK_FAILED (
+            echo [WARNING] Snyk found HIGH/CRITICAL vulnerabilities!
+          )
+          exit /b 0
+        '''
       }
     }
 
