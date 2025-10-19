@@ -87,11 +87,16 @@ pipeline {
           echo Snyk Scan Results (Summary):
           echo ========================================
           snyk test --severity-threshold=high
-
           if defined SNYK_FAILED (
-            echo [WARNING] Snyk found HIGH/CRITICAL vulnerabilities!
+            echo.
+            echo [ERROR] Snyk found HIGH/CRITICAL vulnerabilities! See security-reports\snyk-report.txt
+            exit /b 1
+          ) else (
+            echo.
+            echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found by Snyk.
+            exit /b 0
           )
-          exit /b 0
+
         '''
       }
     }
