@@ -41,27 +41,27 @@ pipeline {
             echo ========================================
             
             rem Generate reports in multiple formats (excluding venv, tests, .git)
-            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f json -o security-reports\\bandit-report.json || set BANDIT_FAILED=1
-            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f txt -o security-reports\\bandit-report.txt || set BANDIT_FAILED=1
-            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f html -o security-reports\\bandit-report.html || set BANDIT_FAILED=1
+            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f json -o security-reports\\bandit-report.json || set BANDIT_FAILED=1
+            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f txt -o security-reports\\bandit-report.txt || set BANDIT_FAILED=1
+            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f html -o security-reports\\bandit-report.html || set BANDIT_FAILED=1
             
             echo.
             echo ========================================
             echo Bandit Scan Results (Summary):
             echo ========================================
-            call %VENV_DIR%\\Scripts\\bandit -r . -x ./venv,./tests,./.git -ll -f screen
+            call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -ll -f screen
             
             if defined BANDIT_FAILED (
               echo.
               echo [WARNING] Bandit found HIGH or MEDIUM severity issues!
               echo Review the report at: security-reports\\bandit-report.html
-              echo Continuing pipeline to test all stages...
-              rem Temporarily not failing - remove 'rem' below to enable strict mode
-              rem exit /b 1
+              echo.
+              echo [INFO] Continuing pipeline to test all stages...
+              echo [INFO] To enable strict mode, uncomment exit /b 1 in Jenkinsfile
+            ) else (
+              echo.
+              echo [SUCCESS] No HIGH/MEDIUM severity issues found by Bandit.
             )
-            
-            echo.
-            echo [SUCCESS] No HIGH/MEDIUM severity issues found by Bandit.
           '''
         }
       }
