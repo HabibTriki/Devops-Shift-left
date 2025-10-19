@@ -64,45 +64,39 @@ pipeline {
 
     stage('SCA - Snyk Dependency Scan') {
       steps {
-        script {
-          bat '''
-            @echo on
-            if not exist security-reports mkdir security-reports
-            
-            echo ========================================
-            echo Running Snyk Dependency Scan...
-            echo ========================================
-            
-            rem Adjust path if you placed snyk.exe elsewhere
-            set SNYK_EXE=tools\\snyk.exe
-            
-            echo Authenticating with Snyk...
-            %SNYK_EXE% auth %SNYK_TOKEN%
-            
-            echo Running Snyk test...
-            %SNYK_EXE% test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
-            %SNYK_EXE% test --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
-            
+        bat '''
+          @echo on
+          if not exist security-reports mkdir security-reports
+
+          rem Point to the local Snyk CLI (adjust path if you put it elsewhere)
+          set SNYK_EXE=tools\\snyk.exe
+
+          echo ========================================
+          echo Running Snyk Dependency Scan...
+          echo ========================================
+
+          echo Authenticating with Snyk...
+          "%SNYK_EXE%" auth %SNYK_TOKEN%
+
+          echo Running Snyk test...
+          "%SNYK_EXE%" test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
+          "%SNYK_EXE%" test --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
+
+          echo.
+          echo ========================================
+          echo Snyk Scan Results (Summary):
+          echo ========================================
+          "%SNYK_EXE%" test --severity-threshold=high
+
+          if defined SNYK_FAILED (
             echo.
-            echo ========================================
-            echo Snyk Scan Results (Summary):
-            echo ========================================
-            %SNYK_EXE% test --severity-threshold=high
-            
-            if defined SNYK_FAILED (
-              echo.
-              echo [WARNING] Snyk found HIGH or CRITICAL vulnerabilities!
-              echo Review the report at: security-reports\\snyk-report.txt
-              echo.
-              echo [INFO] Continuing pipeline to test all stages...
-              echo [INFO] To enable strict mode, edit Jenkinsfile and uncomment exit /b 1
-              rem exit /b 1
-            ) else (
-              echo.
-              echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found by Snyk.
-            )
-          '''
-        }
+            echo [WARNING] Snyk found HIGH/CRITICAL vulnerabilities! See security-reports\\snyk-report.txt
+            rem To enforce failure later:  exit /b 1
+          )
+
+          rem Continue pipeline even if Snyk found issues
+          exit /b 0
+        '''
       }
     }
 
