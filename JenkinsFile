@@ -7,6 +7,7 @@ pipeline {
   environment {
     VENV_DIR = 'venv'
     PYTHONDONTWRITEBYTECODE = '1'
+    SNYK_TOKEN = credentials('snyk-api-token')
   }
   stages {
     stage('Checkout') {
@@ -23,12 +24,70 @@ pipeline {
           if exist requirements.txt (
             call %VENV_DIR%\\Scripts\\python -m pip install -r requirements.txt || exit /b 1
           )
-          rem ↓ remove pytest-junitxml; not a real package
-          call %VENV_DIR%\\Scripts\\python -m pip install pytest pytest-cov || exit /b 1
+          call %VENV_DIR%\\Scripts\\python -m pip install pytest pytest-cov bandit || exit /b 1
         '''
       }
     }
 
+    stage('SAST - Bandit Security Scan') {
+      steps {
+        script {
+          bat '''
+            @echo on
+            if not exist security-reports mkdir security-reports
+            
+            echo Running Bandit security scan...
+            call %VENV_DIR%\\Scripts\\bandit -r . -f json -o security-reports\\bandit-report.json || set BANDIT_FAILED=1
+            call %VENV_DIR%\\Scripts\\bandit -r . -f txt -o security-reports\\bandit-report.txt || set BANDIT_FAILED=1
+            call %VENV_DIR%\\Scripts\\bandit -r . -f html -o security-reports\\bandit-report.html || set BANDIT_FAILED=1
+            
+            echo.
+            echo ========================================
+            echo Bandit Scan Results (Summary):
+            echo ========================================
+            call %VENV_DIR%\\Scripts\\bandit -r . -ll -f screen
+            
+            if defined BANDIT_FAILED (
+              echo.
+              echo [ERROR] Bandit found HIGH or MEDIUM severity issues!
+              echo Review the report at: security-reports\\bandit-report.html
+              exit /b 1
+            )
+          '''
+        }
+      }
+    }
+
+    stage('SCA - Snyk Dependency Scan') {
+      steps {
+        script {
+          bat '''
+            @echo on
+            if not exist security-reports mkdir security-reports
+            
+            echo Authenticating with Snyk...
+            snyk auth %SNYK_TOKEN%
+            
+            echo Running Snyk dependency scan...
+            snyk test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
+            snyk test --severity-threshold=high > security-reports\\snyk-report.txt || set SNYK_FAILED=1
+            
+            echo.
+            echo ========================================
+            echo Snyk Scan Results (Summary):
+            echo ========================================
+            snyk test --severity-threshold=high
+            
+            if defined SNYK_FAILED (
+              echo.
+              echo [ERROR] Snyk found HIGH or CRITICAL vulnerabilities!
+              echo Review the report at: security-reports\\snyk-report.txt
+              exit /b 1
+            )
+          '''
+        }
+      }
+    }
 
     stage('Run unit tests') {
       steps {
@@ -56,9 +115,31 @@ pipeline {
   post {
     always {
       junit testResults: 'reports/junit.xml', allowEmptyResults: true
-      archiveArtifacts artifacts: 'reports/**,coverage/**', allowEmptyArchive: true, onlyIfSuccessful: false
+      archiveArtifacts artifacts: 'reports/**,coverage/**,security-reports/**', allowEmptyArchive: true, onlyIfSuccessful: false
+      
+      script {
+        if (fileExists('security-reports/bandit-report.html')) {
+          publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: true,
+            keepAll: true,
+            reportDir: 'security-reports',
+            reportFiles: 'bandit-report.html',
+            reportName: 'Bandit Security Report'
+          ])
+        }
+      }
+      
       bat 'rmdir /S /Q "%VENV_DIR%" || exit /b 0'
       cleanWs()
+    }
+    
+    success {
+      echo '✓ Pipeline passed! All security scans and tests succeeded.'
+    }
+    
+    failure {
+      echo '✗ Pipeline failed! Check security reports or test results.'
     }
   }
 
