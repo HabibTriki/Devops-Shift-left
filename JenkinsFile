@@ -73,20 +73,21 @@ pipeline {
             echo Running Snyk Dependency Scan...
             echo ========================================
             
-            rem Authenticate with Snyk using the token
-            echo Authenticating with Snyk...
-            snyk auth %SNYK_TOKEN%
+            rem Adjust path if you placed snyk.exe elsewhere
+            set SNYK_EXE=tools\\snyk.exe
             
-            rem Run Snyk test and generate reports
+            echo Authenticating with Snyk...
+            %SNYK_EXE% auth %SNYK_TOKEN%
+            
             echo Running Snyk test...
-            snyk test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
-            snyk test --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
+            %SNYK_EXE% test --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
+            %SNYK_EXE% test --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
             
             echo.
             echo ========================================
             echo Snyk Scan Results (Summary):
             echo ========================================
-            snyk test --severity-threshold=high
+            %SNYK_EXE% test --severity-threshold=high
             
             if defined SNYK_FAILED (
               echo.
