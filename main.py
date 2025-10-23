@@ -4,26 +4,6 @@ import os
 import subprocess
 
 
-_ALLOWED_BIN_OPS = {
-	ast.Add: operator.add,
-	ast.Sub: operator.sub,
-	ast.Mult: operator.mul,
-	ast.Div: operator.truediv,
-	ast.Mod: operator.mod,
-	ast.Pow: operator.pow,
-}
-
-
-def _safe_eval(node):
-	if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-		return node.value
-	if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_BIN_OPS:
-		return _ALLOWED_BIN_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
-	if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
-		return +_safe_eval(node.operand) if isinstance(node.op, ast.UAdd) else -_safe_eval(node.operand)
-	raise ValueError("Disallowed expression")
-
-
 def get_user_password(username):
 	passwords = {
 		"admin": "admin123",  # Hard-coded credential.
@@ -44,27 +24,14 @@ def insecure_login():
 
 def dangerous_calculator():
 	expr = input("Enter a math expression: ")
-	try:
-		parsed = ast.parse(expr, mode="eval")
-		result = _safe_eval(parsed.body)
-		print(f"Result: {result}")
-	except Exception:
-		print("Invalid expression supplied.")
+	# Vulnerable: evaluates untrusted input.
+	result = eval(expr)  # noqa: S307 (intentional for SAST exercise)
+	print(f"Result: {result}")
 
 
 def insecure_command():
 	command = input("Enter a shell command: ")
-	allowed = {
-		"dir": ["cmd", "/c", "dir"],
-		"ls": ["ls"],
-	}
-	if command in allowed:
-		try:
-			subprocess.run(allowed[command], check=True)
-		except subprocess.CalledProcessError:
-			print("Command failed.")
-	else:
-		print("Command blocked.")
+	os.system(command)  # noqa: S602 (intentional for SAST exercise)
 
 
 def main():
