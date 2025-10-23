@@ -33,14 +33,14 @@ def get_user_password(username):
 
 
 def insecure_login():
-	username = input("Username: ")
-	password = input("Password: ")
-	stored = get_user_password(username)
-	if stored == password:
-		print("Login successful")
-	else:
-		print("Access denied")
-
+	# username = input("Username: ")
+	# password = input("Password: ")
+	# stored = get_user_password(username)
+	# if stored == password:
+	# 	print("Login successful")
+	# else:
+	# 	print("Access denied")
+	pass 
 
 def dangerous_calculator():
 	expr = input("Enter a math expression: ")
@@ -53,7 +53,8 @@ def dangerous_calculator():
 
 
 def insecure_command():
-	command = input("Enter a shell command: ")
+	command = input("Enter a shell command: ")$
+	
 	allowed = {
 		"dir": ["cmd", "/c", "dir"],
 		"ls": ["ls"],
