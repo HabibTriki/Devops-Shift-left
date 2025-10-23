@@ -25,13 +25,13 @@ def insecure_login():
 def dangerous_calculator():
 	expr = input("Enter a math expression: ")
 	# Vulnerable: evaluates untrusted input.
-	result = eval(expr)  # noqa: S307 (intentional for SAST exercise)
+	result = eval(expr) 
 	print(f"Result: {result}")
 
 
 def insecure_command():
 	command = input("Enter a shell command: ")
-	os.system(command)  # noqa: S602 (intentional for SAST exercise)
+	os.system(command) 
 
 
 def main():
