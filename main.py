@@ -25,7 +25,6 @@ def _safe_eval(node):
 
 
 def get_user_password(username):
-	# ...existing code...
 	passwords = {
 		"admin": "admin123",  # Hard-coded credential.
 		"user": "password",
@@ -34,7 +33,6 @@ def get_user_password(username):
 
 
 def insecure_login():
-	# ...existing code...
 	username = input("Username: ")
 	password = input("Password: ")
 	stored = get_user_password(username)
