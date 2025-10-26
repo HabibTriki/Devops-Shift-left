@@ -68,13 +68,16 @@ stage('SCA - Snyk Dependency Scan') {
       @echo on
       if not exist security-reports mkdir security-reports
 
+      rem Ensure Snyk in PATH (global npm bin is usually %APPDATA%\\npm on Windows)
+      set "PATH=%APPDATA%\\npm;%PATH%"
+
       rem Check if Snyk is available
       where snyk >nul 2>&1
       if errorlevel 1 (
         echo [ERROR] Snyk not found in PATH
         echo [ERROR] Try installing: npm install -g snyk
-        echo SNYK SCAN SKIPPED - Snyk not installed > security-reports\\snyk-status.txt
-        echo Please install Snyk: npm install -g snyk >> security-reports\\snyk-status.txt
+        >  security-reports\\snyk-status.txt echo SNYK SCAN SKIPPED - Snyk not installed
+        >> security-reports\\snyk-status.txt echo Please install Snyk: npm install -g snyk
         exit /b 0
       )
 
@@ -83,42 +86,41 @@ stage('SCA - Snyk Dependency Scan') {
       echo ========================================
 
       echo Authenticating with Snyk...
-      snyk auth %SNYK_TOKEN%
+      call snyk auth %SNYK_TOKEN% --quiet
       if errorlevel 1 (
         echo [ERROR] Snyk authentication failed
-        echo SNYK SCAN FAILED - Authentication error > security-reports\\snyk-status.txt
+        > security-reports\\snyk-status.txt echo SNYK SCAN FAILED - Authentication error
         exit /b 0
       )
 
       echo.
       echo Running Snyk vulnerability test...
       echo ========================================
-      
-      rem Run Snyk test and capture results
-      snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
-      snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
+
+      rem Run Snyk test and capture results (pip + requirements.txt)
+      call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
+      call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
 
       echo.
       echo ========================================
       echo Snyk Scan Results (Summary):
       echo ========================================
-      snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || echo Vulnerabilities detected
+      call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || echo Vulnerabilities detected
 
       if defined SNYK_FAILED (
         echo.
         echo [WARNING] Snyk found HIGH/CRITICAL vulnerabilities!
-        echo SNYK SCAN FAILED - Vulnerabilities detected > security-reports\\snyk-status.txt
-        echo Check the following reports: >> security-reports\\snyk-status.txt
-        echo   - security-reports\\snyk-report.txt >> security-reports\\snyk-status.txt
-        echo   - security-reports\\snyk-report.json >> security-reports\\snyk-status.txt
-        echo Will be fixed later >> security-reports\\snyk-status.txt
+        >  security-reports\\snyk-status.txt echo SNYK SCAN FAILED - Vulnerabilities detected
+        >> security-reports\\snyk-status.txt echo Check the following reports:
+        >> security-reports\\snyk-status.txt echo   - security-reports\\snyk-report.txt
+        >> security-reports\\snyk-status.txt echo   - security-reports\\snyk-report.json
       ) else (
         echo.
         echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found
-        echo SNYK SCAN PASSED > security-reports\\snyk-status.txt
+        > security-reports\\snyk-status.txt echo SNYK SCAN PASSED
       )
 
-      rem IMPORTANT: keep pipeline going regardless of Snyk result (like Bandit)
+      rem Keep pipeline going (warning-only mode)
       exit /b 0
     '''
   }
