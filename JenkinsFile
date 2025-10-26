@@ -160,70 +160,49 @@ pipeline {
     }
   }
 
-  stage('DAST - OWASP ZAP Baseline (Docker)') {
+  stage('DAST - Nuclei (fast)') {
     steps {
       bat '''
         @echo on
+        if not exist tools\\nuclei mkdir tools\\nuclei
         if not exist security-reports mkdir security-reports
 
-        where docker >nul 2>&1
-        if errorlevel 1 (
-          echo [ERROR] Docker non disponible - installez/ouvrez Docker Desktop.
+        rem --- Download nuclei (Windows amd64) once ---
+        if not exist tools\\nuclei\\nuclei.exe powershell -Command ^
+          "$u='https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_windows_amd64.zip';" ^
+          "$z='tools/nuclei/nuclei.zip'; (New-Object Net.WebClient).DownloadFile($u,$z); " ^
+          "Add-Type -AssemblyName System.IO.Compression.FileSystem; " ^
+          "[IO.Compression.ZipFile]::ExtractToDirectory($z,'tools/nuclei', $true)"
+
+        rem --- Download templates (first time ~fast; lighter than Docker) ---
+        if not exist tools\\nuclei-templates (
+          tools\\nuclei\\nuclei.exe -update-templates -ut-dir tools\\nuclei-templates || exit /b 2
+        )
+
+        set TARGET=http://localhost:5000
+        set OUT_JSON=security-reports\\nuclei-report.json
+        set OUT_TXT=security-reports\\nuclei-report.txt
+
+        rem --- Scan only High/Critical severities ---
+        tools\\nuclei\\nuclei.exe -u %TARGET% -duc -silent ^
+          -severity high,critical ^
+          -t tools\\nuclei-templates ^
+          -json -o %OUT_JSON% > %OUT_TXT% 2>&1
+
+        rem --- Fail if findings exist (non-empty JSON file) ---
+        for %%A in ("%OUT_JSON%") do set SIZE=%%~zA
+        if "%SIZE%"=="" set SIZE=0
+        if %SIZE% GTR 2 (
+          echo [ERROR] Nuclei a detecte des failles High/Critical. Echec du pipeline.
           exit /b 1
         )
 
-        rem Use host.docker.internal since app runs on Windows host (venv)
-        set TARGET=http://host.docker.internal:5000
-        set ZAP_IMG=ghcr.io/zaproxy/zaproxy:stable
-
-        echo ========================================
-        echo Pre-pulling ZAP image...
-        echo ========================================
-        docker pull %ZAP_IMG%
-        if errorlevel 1 (
-          echo [ERROR] Impossible de tirer l'image %ZAP_IMG% depuis le registre (reseau/proxy/Hub).
-          echo Astuces: verifiez Docker Desktop, connexion Internet/Proxy, "docker login", testez: docker pull hello-world
-          exit /b 2
-        )
-
-        echo ========================================
-        echo Running ZAP Baseline (target: %TARGET%)
-        echo ========================================
-        docker run --rm -t -v "%CD%\\security-reports:/zap/wrk" ^
-          %ZAP_IMG% zap-baseline.py ^
-            -t %TARGET% ^
-            -m 60 ^
-            -l High ^
-            -J /zap/wrk/zap-report.json ^
-            -r zap-report.html
-
-        set ZAP_EXIT=%ERRORLEVEL%
-
-        rem 125/126/127 often indicate run-time/container issues; treat as infra error, not security
-        if %ZAP_EXIT% EQU 125 (
-          echo [ERROR] Docker run error (code 125). Voir daemon/logs.
-          exit /b 2
-        )
-        if %ZAP_EXIT% EQU 126 (
-          echo [ERROR] Docker run permission error (code 126).
-          exit /b 2
-        )
-        if %ZAP_EXIT% EQU 127 (
-          echo [ERROR] Docker run command-not-found (code 127).
-          exit /b 2
-        )
-
-        rem Non-zero now likely means ZAP found High+ (per -l High)
-        if %ZAP_EXIT% NEQ 0 (
-          echo [ERROR] ZAP a detecte des failles High/Critical. Echec du pipeline.
-          exit /b 1
-        )
-
-        echo [OK] ZAP Baseline: aucun High/Critical.
+        echo [OK] Nuclei: pas de High/Critical.
         exit /b 0
       '''
     }
   }
+
 
 
   stage('Stop ephemeral app') {
