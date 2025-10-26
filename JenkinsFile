@@ -172,11 +172,19 @@ pipeline {
           echo Downloading Nuclei...
           powershell -Command ^
             "$ProgressPreference='SilentlyContinue'; " ^
-            "$u='https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_windows_amd64.zip'; " ^
-            "$z='tools/nuclei/nuclei.zip'; " ^
-            "Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing; " ^
-            "Expand-Archive -Path $z -DestinationPath tools/nuclei -Force; " ^
-            "Remove-Item $z"
+            "try { " ^
+            "  $releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/projectdiscovery/nuclei/releases/latest'; " ^
+            "  $asset = $releases.assets | Where-Object { $_.name -like '*windows_amd64.zip' } | Select-Object -First 1; " ^
+            "  $u = $asset.browser_download_url; " ^
+            "  $z = 'tools/nuclei/nuclei.zip'; " ^
+            "  Write-Host \"Downloading from: $u\"; " ^
+            "  Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing; " ^
+            "  Expand-Archive -Path $z -DestinationPath tools/nuclei -Force; " ^
+            "  Remove-Item $z; " ^
+            "} catch { " ^
+            "  Write-Host \"Error: $_\"; " ^
+            "  exit 1; " ^
+            "}"
           
           if not exist tools\\nuclei\\nuclei.exe (
             echo [ERROR] Failed to download or extract Nuclei
