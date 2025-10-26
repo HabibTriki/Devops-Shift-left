@@ -174,7 +174,7 @@ pipeline {
 
         rem Use host.docker.internal since app runs on Windows host (venv)
         set TARGET=http://host.docker.internal:5000
-        set ZAP_IMG=owasp/zap2docker-stable
+        set ZAP_IMG=ghcr.io/zaproxy/zaproxy:stable
 
         echo ========================================
         echo Pre-pulling ZAP image...
