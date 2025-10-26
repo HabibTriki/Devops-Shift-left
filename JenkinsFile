@@ -168,14 +168,25 @@ pipeline {
         if not exist security-reports mkdir security-reports
 
         rem --- Download nuclei (Windows amd64) once ---
-        if not exist tools\\nuclei\\nuclei.exe powershell -Command ^
-          "$u='https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_windows_amd64.zip';" ^
-          "$z='tools/nuclei/nuclei.zip'; (New-Object Net.WebClient).DownloadFile($u,$z); " ^
-          "Add-Type -AssemblyName System.IO.Compression.FileSystem; " ^
-          "[IO.Compression.ZipFile]::ExtractToDirectory($z,'tools/nuclei', $true)"
+        if not exist tools\\nuclei\\nuclei.exe (
+          echo Downloading Nuclei...
+          powershell -Command ^
+            "$ProgressPreference='SilentlyContinue'; " ^
+            "$u='https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_windows_amd64.zip'; " ^
+            "$z='tools/nuclei/nuclei.zip'; " ^
+            "Invoke-WebRequest -Uri $u -OutFile $z -UseBasicParsing; " ^
+            "Expand-Archive -Path $z -DestinationPath tools/nuclei -Force; " ^
+            "Remove-Item $z"
+          
+          if not exist tools\\nuclei\\nuclei.exe (
+            echo [ERROR] Failed to download or extract Nuclei
+            exit /b 2
+          )
+        )
 
         rem --- Download templates (first time ~fast; lighter than Docker) ---
         if not exist tools\\nuclei-templates (
+          echo Downloading Nuclei templates...
           tools\\nuclei\\nuclei.exe -update-templates -ut-dir tools\\nuclei-templates || exit /b 2
         )
 
@@ -184,6 +195,7 @@ pipeline {
         set OUT_TXT=security-reports\\nuclei-report.txt
 
         rem --- Scan only High/Critical severities ---
+        echo Running Nuclei scan on %TARGET%...
         tools\\nuclei\\nuclei.exe -u %TARGET% -duc -silent ^
           -severity high,critical ^
           -t tools\\nuclei-templates ^
