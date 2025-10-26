@@ -159,7 +159,7 @@ pipeline {
       '''
     }
   }
-  
+
   stage('DAST - OWASP ZAP Baseline (Docker)') {
     steps {
       bat '''
@@ -168,31 +168,63 @@ pipeline {
 
         where docker >nul 2>&1
         if errorlevel 1 (
-          echo [ERROR] Docker non disponible - impossible de lancer ZAP Baseline en conteneur
+          echo [ERROR] Docker non disponible - installez/ouvrez Docker Desktop.
           exit /b 1
         )
 
-        set TARGET=http://localhost:5000
+        rem Use host.docker.internal since app runs on Windows host (venv)
+        set TARGET=http://host.docker.internal:5000
         set ZAP_IMG=owasp/zap2docker-stable
+
+        echo ========================================
+        echo Pre-pulling ZAP image...
+        echo ========================================
+        docker pull %ZAP_IMG%
+        if errorlevel 1 (
+          echo [ERROR] Impossible de tirer l'image %ZAP_IMG% depuis le registre (reseau/proxy/Hub).
+          echo Astuces: verifiez Docker Desktop, connexion Internet/Proxy, "docker login", testez: docker pull hello-world
+          exit /b 2
+        )
 
         echo ========================================
         echo Running ZAP Baseline (target: %TARGET%)
         echo ========================================
-
-        rem Run baseline: -m 60 spider minutes, -l High => fail on High+
         docker run --rm -t -v "%CD%\\security-reports:/zap/wrk" ^
-          %ZAP_IMG% zap-baseline.py -t %TARGET% -m 60 -l High -J /zap/wrk/zap-report.json -r zap-report.html
+          %ZAP_IMG% zap-baseline.py ^
+            -t %TARGET% ^
+            -m 60 ^
+            -l High ^
+            -J /zap/wrk/zap-report.json ^
+            -r zap-report.html
 
-        if errorlevel 1 (
-          echo [ERROR] ZAP detected High/Critical issues. Failing pipeline.
+        set ZAP_EXIT=%ERRORLEVEL%
+
+        rem 125/126/127 often indicate run-time/container issues; treat as infra error, not security
+        if %ZAP_EXIT% EQU 125 (
+          echo [ERROR] Docker run error (code 125). Voir daemon/logs.
+          exit /b 2
+        )
+        if %ZAP_EXIT% EQU 126 (
+          echo [ERROR] Docker run permission error (code 126).
+          exit /b 2
+        )
+        if %ZAP_EXIT% EQU 127 (
+          echo [ERROR] Docker run command-not-found (code 127).
+          exit /b 2
+        )
+
+        rem Non-zero now likely means ZAP found High+ (per -l High)
+        if %ZAP_EXIT% NEQ 0 (
+          echo [ERROR] ZAP a detecte des failles High/Critical. Echec du pipeline.
           exit /b 1
         )
 
-        echo [OK] ZAP Baseline passed with no High/Critical issues.
+        echo [OK] ZAP Baseline: aucun High/Critical.
         exit /b 0
       '''
     }
   }
+
 
   stage('Stop ephemeral app') {
     steps {
