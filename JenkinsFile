@@ -265,18 +265,29 @@ pipeline {
 
   post {
     always {
+      // Stop any remaining Flask processes
+      bat '''
+        @echo off
+        for /f "tokens=2 delims=," %%a in ('tasklist /FI "WINDOWTITLE eq flask_ephemeral" /FO CSV /NH 2^>nul') do taskkill /PID %%~a /F >nul 2>&1
+        for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5000" ^| findstr "LISTENING"') do taskkill /F /PID %%a 2>nul
+        timeout /t 2 /nobreak >nul 2>&1
+      '''
+      
       // Publish test results
       junit testResults: 'reports/junit.xml', allowEmptyResults: true
       
       // Archive all reports
       archiveArtifacts artifacts: 'reports/**,coverage/**,security-reports/**', allowEmptyArchive: true, onlyIfSuccessful: false
       
-      // HTML reports are archived as artifacts above
-      // You can view them by downloading from the artifacts section
+      // Clean up venv (with retry)
+      bat '''
+        @echo off
+        timeout /t 2 /nobreak >nul 2>&1
+        rmdir /S /Q "%VENV_DIR%" 2>nul || echo Venv cleanup skipped (files in use)
+      '''
       
-      // Clean up
-      bat 'rmdir /S /Q "%VENV_DIR%" || exit /b 0'
-      cleanWs()
+      // Clean workspace (delete new files only, ignore failures)
+      cleanWs deleteDirs: true, notFailBuild: true
     }
     
     success {
