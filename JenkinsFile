@@ -195,7 +195,7 @@ pipeline {
         rem --- Download templates (first time ~fast; lighter than Docker) ---
         if not exist tools\\nuclei-templates (
           echo Downloading Nuclei templates...
-          tools\\nuclei\\nuclei.exe -update-templates -ut-dir tools\\nuclei-templates || exit /b 2
+          tools\\nuclei\\nuclei.exe -update-templates -update-template-dir tools\\nuclei-templates || exit /b 2
         )
 
         set TARGET=http://localhost:5000
