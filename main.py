@@ -173,6 +173,35 @@ def calc():
     except Exception as e:
         return jsonify({"ok": False, "reason": "invalid expression", "detail": str(e)}), 400
 
+# VULNERABLE ROUTE - Intentionally insecure for testing
+@app.route("/admin/exec", methods=["GET", "POST"])
+def admin_exec():
+    """
+    DANGEROUS: This route allows arbitrary command execution
+    Security Issues:
+    - No authentication required
+    - Command injection vulnerability
+    - Uses eval() which is extremely dangerous
+    """
+    if request.method == "GET":
+        return jsonify({
+            "warning": "This is a dangerous endpoint",
+            "usage": "POST with {\"command\": \"your_command\"}"
+        }), 200
+    
+    data = request.get_json(silent=True) or {}
+    command = data.get("command", "")
+    
+    if not command:
+        return jsonify({"error": "No command provided"}), 400
+    
+    try:
+        # CRITICAL VULNERABILITY: Using eval() - allows arbitrary code execution
+        result = eval(command)
+        return jsonify({"ok": True, "result": str(result)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     # host and port must match Dockerfile expectation (0.0.0.0:5000)
     port = int(os.getenv("PORT", 5000))
