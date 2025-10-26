@@ -50,7 +50,7 @@ pipeline {
         call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -iii -q
         if errorlevel 1 (
           echo [ERROR] Bandit a détecté des vulnérabilités HIGH.
-          exit /b 0
+          exit /b 1
         )
 
         rem Ici: pas de HIGH => on laisse passer
