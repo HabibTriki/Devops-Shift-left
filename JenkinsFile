@@ -90,7 +90,8 @@ pipeline {
             exit /b 0
           )
 
-          echo Running Snyk test...
+          echo.
+          echo Running Snyk vulnerability test...
           snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
           snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
 
@@ -98,7 +99,7 @@ pipeline {
           echo ========================================
           echo Snyk Scan Results (Summary):
           echo ========================================
-          snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || set SNYK_FAILED=1
+          snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || echo Vulnerabilities found
 
           if defined SNYK_FAILED (
             echo.
@@ -119,7 +120,6 @@ pipeline {
         '''
       }
     }
-
 
 
     stage('Run unit tests') {
