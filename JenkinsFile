@@ -29,102 +29,100 @@ pipeline {
       }
     }
 
-    stage('SAST - Bandit Security Scan') {
-      steps {
-        bat '''
-          @echo on
-          if not exist security-reports mkdir security-reports
+  stage('SAST - Bandit Security Scan') {
+    steps {
+      bat '''
+        @echo on
+        if not exist security-reports mkdir security-reports
 
-          echo ========================================
-          echo Running Bandit Security Scan...
-          echo ========================================
+        rem --- Rapports (toujours générés) ---
+        call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f json -o security-reports\\bandit-report.json  || set BANDIT_REPORT=1
+        call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f txt  -o security-reports\\bandit-report.txt   || set BANDIT_REPORT=1
+        call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f html -o security-reports\\bandit-report.html  || set BANDIT_REPORT=1
 
-          rem Generate reports (warning-only mode)
-          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f json -o security-reports\\bandit-report.json  || set BANDIT_FAILED=1
-          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f txt  -o security-reports\\bandit-report.txt   || set BANDIT_FAILED=1
-          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -f html -o security-reports\\bandit-report.html  || set BANDIT_FAILED=1
+        echo ========================================
+        echo Bandit Scan Results (Summary):
+        echo ========================================
+        call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -ll -f screen || rem summary best effort
 
-          echo.
-          echo ========================================
-          echo Bandit Scan Results (Summary):
-          echo ========================================
-          call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -ll -f screen  || set BANDIT_FAILED=1
+        rem --- Garde de sévérité (échoue si HIGH détecté) ---
+        rem -iii = ne considère que les HIGH ; -q = silencieux (retourne code != 0 si findings)
+        call venv\\Scripts\\bandit -r . -x ./venv,./tests,./.git -iii -q
+        if errorlevel 1 (
+          echo [ERROR] Bandit a détecté des vulnérabilités HIGH.
+          exit /b 1
+        )
 
-          if defined BANDIT_FAILED (
-            echo.
-            echo [WARNING] Bandit found issues. Reports saved under security-reports\\bandit-report.*
-            rem STRICT MODE (later): to fail build on findings, replace the next line with:  exit /b 1
-          )
-
-          rem IMPORTANT: keep pipeline going regardless of Bandit result
-          exit /b 0
-        '''
-      }
+        rem Ici: pas de HIGH => on laisse passer
+        exit /b 0
+      '''
     }
-
-stage('SCA - Snyk Dependency Scan') {
-  steps {
-    bat '''
-      @echo on
-      if not exist security-reports mkdir security-reports
-
-      rem Ensure Snyk in PATH (global npm bin is usually %APPDATA%\\npm on Windows)
-      set "PATH=%APPDATA%\\npm;%PATH%"
-
-      rem Check if Snyk is available
-      where snyk >nul 2>&1
-      if errorlevel 1 (
-        echo [ERROR] Snyk not found in PATH
-        echo [ERROR] Try installing: npm install -g snyk
-        >  security-reports\\snyk-status.txt echo SNYK SCAN SKIPPED - Snyk not installed
-        >> security-reports\\snyk-status.txt echo Please install Snyk: npm install -g snyk
-        exit /b 0
-      )
-
-      echo ========================================
-      echo Running Snyk Dependency Scan...
-      echo ========================================
-
-      echo Authenticating with Snyk...
-      call snyk auth %SNYK_TOKEN% --quiet
-      if errorlevel 1 (
-        echo [ERROR] Snyk authentication failed
-        > security-reports\\snyk-status.txt echo SNYK SCAN FAILED - Authentication error
-        exit /b 0
-      )
-
-      echo.
-      echo Running Snyk vulnerability test...
-      echo ========================================
-
-      rem Run Snyk test and capture results (pip + requirements.txt)
-      call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
-      call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
-
-      echo.
-      echo ========================================
-      echo Snyk Scan Results (Summary):
-      echo ========================================
-      call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || echo Vulnerabilities detected
-
-      if defined SNYK_FAILED (
-        echo.
-        echo [WARNING] Snyk found HIGH/CRITICAL vulnerabilities!
-        >  security-reports\\snyk-status.txt echo SNYK SCAN FAILED - Vulnerabilities detected
-        >> security-reports\\snyk-status.txt echo Check the following reports:
-        >> security-reports\\snyk-status.txt echo   - security-reports\\snyk-report.txt
-        >> security-reports\\snyk-status.txt echo   - security-reports\\snyk-report.json
-      ) else (
-        echo.
-        echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found
-        > security-reports\\snyk-status.txt echo SNYK SCAN PASSED
-      )
-
-      rem Keep pipeline going (warning-only mode)
-      exit /b 0
-    '''
   }
-}
+
+
+  stage('SCA - Snyk Dependency Scan') {
+    steps {
+      bat '''
+        @echo on
+        if not exist security-reports mkdir security-reports
+
+        rem Ensure Snyk in PATH (global npm bin is usually %APPDATA%\\npm on Windows)
+        set "PATH=%APPDATA%\\npm;%PATH%"
+
+        rem Check if Snyk is available
+        where snyk >nul 2>&1
+        if errorlevel 1 (
+          echo [ERROR] Snyk not found in PATH
+          echo [ERROR] Try installing: npm install -g snyk
+          >  security-reports\\snyk-status.txt echo SNYK SCAN SKIPPED - Snyk not installed
+          >> security-reports\\snyk-status.txt echo Please install Snyk: npm install -g snyk
+          exit /b 0
+        )
+
+        echo ========================================
+        echo Running Snyk Dependency Scan...
+        echo ========================================
+
+        echo Authenticating with Snyk...
+        call snyk auth %SNYK_TOKEN% --quiet
+        if errorlevel 1 (
+          echo [ERROR] Snyk authentication failed
+          > security-reports\\snyk-status.txt echo SNYK SCAN FAILED - Authentication error
+          exit /b 0
+        )
+
+        echo.
+        echo Running Snyk vulnerability test...
+        echo ========================================
+
+        rem Run Snyk test and capture results (pip + requirements.txt)
+        call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high --json-file-output=security-reports\\snyk-report.json || set SNYK_FAILED=1
+        call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high > security-reports\\snyk-report.txt 2>&1 || set SNYK_FAILED=1
+
+        echo.
+        echo ========================================
+        echo Snyk Scan Results (Summary):
+        echo ========================================
+        call snyk test --file=requirements.txt --package-manager=pip --severity-threshold=high || echo Vulnerabilities detected
+
+        if defined SNYK_FAILED (
+          echo.
+          echo [WARNING] Snyk found HIGH/CRITICAL vulnerabilities!
+          >  security-reports\\snyk-status.txt echo SNYK SCAN FAILED - Vulnerabilities detected
+          >> security-reports\\snyk-status.txt echo Check the following reports:
+          >> security-reports\\snyk-status.txt echo   - security-reports\\snyk-report.txt
+          >> security-reports\\snyk-status.txt echo   - security-reports\\snyk-report.json
+        ) else (
+          echo.
+          echo [SUCCESS] No HIGH/CRITICAL vulnerabilities found
+          > security-reports\\snyk-status.txt echo SNYK SCAN PASSED
+        )
+
+        rem Keep pipeline going (warning-only mode)
+        exit /b 0
+      '''
+    }
+  }
 
 
     stage('Run unit tests') {
